@@ -9,6 +9,8 @@ In https://github.com/cristina2689/iio_evgen_local/blob/master/iio_simple_dummy_
 
 Problema:
 * handlerul din iio_simple_dummy_events.c trebuie sa aiba forma:
+
 static void iio_simple_dummy_event_handler(struct irq_work *work) {}
+
 si nu poate sa acceseze struct iio_dev-ul pentru care trebuie sa faca push in userspace, e.g. iio_push_event(indio_dev,...)
 * ca sa rezolv, am adaugat un camp struct iio_dev *src_dev  in regs, dar tot nu merge, pentru ca nu retin nicaieri maparea intre dispozitive si regs => nu am cum sa accesez regs
