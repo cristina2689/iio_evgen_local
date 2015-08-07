@@ -1,4 +1,5 @@
 Version1:
+
 In iio_dummy_evgen.c :
 * modulul se ocupa de poke si asignarea registrelor
 * registrele se asigneaza pe principiul primul venit, primul servit, in iio_dummy_evgen_get_regs(void)
