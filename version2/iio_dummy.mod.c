@@ -22,10 +22,11 @@ __attribute__((section("__versions"))) = {
 	{ 0x4b77f6d3, __VMLINUX_SYMBOL_STR(module_layout) },
 	{ 0xd2b09ce5, __VMLINUX_SYMBOL_STR(__kmalloc) },
 	{ 0xe4689576, __VMLINUX_SYMBOL_STR(ktime_get_with_offset) },
+	{ 0xb19c6296, __VMLINUX_SYMBOL_STR(iio_dummy_evgen_create) },
 	{ 0xc0a3d105, __VMLINUX_SYMBOL_STR(find_next_bit) },
-	{ 0x17144568, __VMLINUX_SYMBOL_STR(iio_dummy_evgen_get_regs) },
 	{ 0x6bc138f3, __VMLINUX_SYMBOL_STR(mutex_unlock) },
 	{ 0x87cf31b8, __VMLINUX_SYMBOL_STR(__mutex_init) },
+	{ 0x8a9f99ec, __VMLINUX_SYMBOL_STR(iio_dummy_init_work_handler) },
 	{ 0xa83693d8, __VMLINUX_SYMBOL_STR(mutex_lock) },
 	{ 0xbdfb6dbb, __VMLINUX_SYMBOL_STR(__fentry__) },
 	{ 0x766d67cd, __VMLINUX_SYMBOL_STR(__dynamic_dev_dbg) },
@@ -33,7 +34,6 @@ __attribute__((section("__versions"))) = {
 	{ 0xb352177e, __VMLINUX_SYMBOL_STR(find_first_bit) },
 	{ 0x63c4d61f, __VMLINUX_SYMBOL_STR(__bitmap_weight) },
 	{ 0x383c7c9d, __VMLINUX_SYMBOL_STR(param_ops_uint) },
-	{ 0x1cd7225e, __VMLINUX_SYMBOL_STR(iio_evgen_register_work_handler) },
 };
 
 static const char __module_depends[]
@@ -42,4 +42,4 @@ __attribute__((section(".modinfo"))) =
 "depends=iio_dummy_evgen";
 
 
-MODULE_INFO(srcversion, "518143D87956B958C028AE4");
+MODULE_INFO(srcversion, "6DC13A701D7ADD0D4ED1ACA");

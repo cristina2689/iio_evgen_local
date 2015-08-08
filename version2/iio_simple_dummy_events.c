@@ -20,11 +20,6 @@
 /* Evgen 'fakes' interrupt events for this example */
 #include "iio_dummy_evgen.h"
 
-struct dummy_event {
-	struct iio_dev *dev;
-	struct irq_work work;
-};
-
 /**
  * iio_simple_dummy_read_event_config() - is event enabled?
  * @indio_dev: the device instance data
@@ -168,16 +163,16 @@ int iio_simple_dummy_write_event_value(struct iio_dev *indio_dev,
  * Here only one event occurs so we push that directly on with locally
  * grabbed timestamp.
  */
-static void iio_simple_dummy_event_handler(struct irq_work *work)
+void iio_simple_dummy_event_handler(struct irq_work *work)
 {
-	struct dummy_eventi *ev = container_of(work, struct dummy_event, work);
-	struct iio_dev *indio_dev = ev->dev;
+	struct iio_dummy_event *iio_event = container_of(work, struct iio_dummy_event, work);
+	struct iio_dev *indio_dev = iio_event->dev;
 	struct iio_dummy_state *st = iio_priv(indio_dev);
 
 	dev_dbg(&indio_dev->dev, "id %x event %x\n",
-		st->regs->reg_id, st->regs->reg_data);
+		iio_event->regs.reg_id, iio_event->regs.reg_data);
 
-	switch (st->regs->reg_data) {
+	switch (iio_event->regs.reg_data) {
 	case 0:
 		iio_push_event(indio_dev,
 			       IIO_EVENT_CODE(IIO_VOLTAGE, 0, 0,
@@ -227,14 +222,14 @@ static void iio_simple_dummy_event_handler(struct irq_work *work)
  * no way forms part of this example. Just assume that events magically
  * appear via the provided interrupt.
  */
-void iio_simple_dummy_events_register(struct iio_dev *indio_dev)
+int iio_simple_dummy_events_register(struct iio_dev *indio_dev, int index)
 {
-	struct iio_dummy_event ev;
-	struct iio_dummy_state *st = iio_priv(indio_dev);
-
-	st->regs = iio_dummy_evgen_get_regs();
-	ev->dev = indio_dev;
-	init_irq_work(&ev->work, iio_simple_dummy_event_handler);
+	if (!iio_dummy_evgen_create(indio_dev, index)) {
+		/* register handler */
+		iio_dummy_init_work_handler(index, iio_simple_dummy_event_handler);
+		return 0;
+	}
+	return -EFAULT;
 }
 
 /**

@@ -25,50 +25,80 @@
 #include <linux/iio/iio.h>
 #include <linux/iio/sysfs.h>
 
-/* Fiddly bit of faking and irq without hardware */
-#define IIO_EVENTGEN_NO 10
-/**
- * struct iio_dummy_evgen - evgen state
- * @regs: irq regs we are faking
- */
-struct iio_dummy_eventgen {
-	// pointer to list of dummy_event
-	bool enabled[IIO_EVENTGEN_NO];
-	bool inuse[IIO_EVENTGEN_NO];
-	struct iio_dummy_regs regs[IIO_EVENTGEN_NO];
-};
+static LIST_HEAD(iio_dummy_event_list);
+static DEFINE_MUTEX(iio_dummy_event_list_mutex);
 
-/* We can only ever have one instance of this 'device' */
-static struct iio_dummy_eventgen *iio_evgen;
-
-static int iio_dummy_evgen_create(void)
+struct iio_dummy_event *get_event(int index)
 {
-	iio_evgen = kzalloc(sizeof(*iio_evgen), GFP_KERNEL);
-	if (!iio_evgen)
+	struct list_head *ptr, *tmp;
+	struct iio_dummy_event *iio_event;
+
+	list_for_each_safe(ptr, tmp, &iio_dummy_event_list) {
+		iio_event = list_entry(ptr, struct iio_dummy_event, l);
+		if (iio_event->regs.reg_id == index) {
+			return iio_event;
+		}
+	}
+	return NULL;
+}
+
+int iio_dummy_evgen_create(struct iio_dev *indio_dev, int index)
+{
+	struct iio_dummy_event *iio_event;
+
+	mutex_lock(&iio_dummy_event_list_mutex);
+	iio_event = kzalloc(sizeof(struct iio_dummy_event), GFP_KERNEL);
+	if (!iio_event)
 		return -ENOMEM;
+
+	iio_event->dev = indio_dev;
+	iio_event->regs.reg_id = index;
+	list_add(&iio_event->l, &iio_dummy_event_list);
+	mutex_unlock(&iio_dummy_event_list_mutex);
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(iio_dummy_evgen_create);
 
-struct iio_dummy_regs *iio_dummy_evgen_get_regs(void)
+void iio_dummy_init_work_handler(int index, void (*f)(struct irq_work *))
 {
-	unsigned int i;
-	for (i = 0; i < IIO_EVGEN_NO; i++) {
-		if (!iio_evgen->enabled[i])
-		return &iio_evgen->regs[i];
+	struct iio_dummy_event *iio_event;
+
+	if (get_event(index)){
+		init_irq_work(&iio_event->work, f);
 	}
+}
+EXPORT_SYMBOL_GPL(iio_dummy_init_work_handler);
+
+struct iio_dummy_regs *iio_dummy_evgen_get_regs(int index)
+{
+	struct iio_dummy_event *iio_event;
+
+	if (iio_event = get_event(index))
+		return &iio_event->regs;
+
 	return NULL;
 }
 EXPORT_SYMBOL_GPL(iio_dummy_evgen_get_regs);
 
-static void iio_dummy_evgen_free(void)
+
+static void iio_dummy_evgen_free(int index)
 {
-	kfree(iio_evgen);
+	struct list_head *ptr, *tmp;
+	struct iio_dummy_event *iio_event;
+
+	// add mutex
+	list_for_each_safe(ptr, tmp, &iio_dummy_event_list) {
+		iio_event =  list_entry(ptr, struct iio_dummy_event, l);
+		if (iio_event->regs.reg_id == index) {
+			list_del(ptr);
+			kfree(iio_event);
+		}
+	}
 }
 
 static void iio_evgen_release(struct device *dev)
 {
-	iio_dummy_evgen_free();
 }
 
 static ssize_t iio_evgen_poke(struct device *dev,
@@ -78,19 +108,19 @@ static ssize_t iio_evgen_poke(struct device *dev,
 {
 	struct iio_dev_attr *this_attr = to_iio_dev_attr(attr);
 	unsigned long event;
+	struct iio_dummy_event *iio_event;
 	int ret;
 
 	ret = kstrtoul(buf, 10, &event);
 	if (ret)
 		return ret;
 
-	iio_evgen->regs[this_attr->address].reg_id   = this_attr->address;
-	iio_evgen->regs[this_attr->address].reg_data = event;
-
-	// lista de events si itereaza prin ele??
-	if (iio_evgen->enabled[this_attr->address])
-		irq_work_queue(work->
-
+	if ((iio_event = get_event(this_attr->address))) {
+		iio_event->regs.reg_data = event;
+		// maybe check if previous interrupt has not been handled yet
+		// to avoid overwritting
+		irq_work_queue(&iio_event->work);
+	}
 	return len;
 }
 
@@ -136,10 +166,6 @@ static struct device iio_evgen_dev = {
 
 static __init int iio_dummy_evgen_init(void)
 {
-	int ret = iio_dummy_evgen_create();
-
-	if (ret < 0)
-		return ret;
 	device_initialize(&iio_evgen_dev);
 	dev_set_name(&iio_evgen_dev, "iio_evgen");
 	return device_add(&iio_evgen_dev);

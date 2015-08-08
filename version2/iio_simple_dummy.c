@@ -635,7 +635,7 @@ static int iio_dummy_probe(int index)
 	/* Specify that device provides sysfs type interfaces */
 	indio_dev->modes = INDIO_DIRECT_MODE;
 
-	ret = iio_simple_dummy_events_register(indio_dev);
+	ret = iio_simple_dummy_events_register(indio_dev, index);
 	if (ret < 0)
 		goto error_free_device;
 
