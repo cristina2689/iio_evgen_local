@@ -11,5 +11,9 @@ In iio_simple_dummy_events.c :
 * handlerul pentru tratarea evenimentului corespunzator driverului, iio_simple_dummy_event_handler face push in userspace pe baza 
 pointerului de la regs, care va retine si sursa evenimentului, src_dev
 
+Version 2:
+* introdus structura "struct iio_dummy_event" in iio_dummy_evgen.h
 
+TODO:
+ - test both versions
 
