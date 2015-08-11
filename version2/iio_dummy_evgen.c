@@ -62,9 +62,9 @@ EXPORT_SYMBOL_GPL(iio_dummy_evgen_create);
 
 void iio_dummy_init_work_handler(int index, void (*f)(struct irq_work *))
 {
-	struct iio_dummy_event *iio_event;
+	struct iio_dummy_event *iio_event = get_event(index);
 
-	if (get_event(index)){
+	if (iio_event){
 		init_irq_work(&iio_event->work, f);
 	}
 }
