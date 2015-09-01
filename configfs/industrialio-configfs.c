@@ -80,7 +80,7 @@ static struct config_group *device_make_group(struct config_group *group,
 static void device_drop_group(struct config_group *group,
 			       struct config_item *item)
 {
-//	iio_dummy_remove(2);
+ 	iio_dummy_remove(item->ci_name);
 	printk(KERN_ALERT "device drop group called\n");
 	config_item_put(item);	
 }
