@@ -26,7 +26,7 @@ static struct config_group *trigger_make_group(struct config_group *group,
 	t = iio_sw_trigger_create(group->cg_item.ci_name, name);
 	if (IS_ERR(t))
 		return ERR_CAST(t);
-
+	printk(KERN_ALERT "Called make_group: %s\n", name);
 	config_item_set_name(&t->group.cg_item, name);
 
 	return &t->group;
@@ -37,6 +37,7 @@ static void trigger_drop_group(struct config_group *group,
 {
 	struct iio_sw_trigger *t = to_iio_sw_trigger(item);
 
+	printk(KERN_ALERT "Called drop_group");
 	iio_sw_trigger_destroy(t);
 	config_item_put(item);
 }
@@ -61,51 +62,60 @@ static struct config_group iio_triggers_group = {
 		.ci_type = &iio_triggers_group_type,
 	},
 };
+//-----------------------------------------------------------------
 
-//---------------------------------------------------------------------------
 static struct config_group *device_make_group(struct config_group *group,
 					       const char *name)
 {
+	struct iio_dummy_instance *dummy = kzalloc(sizeof(struct iio_dummy_instance), GFP_KERNEL);
+
+	config_item_set_name(&dummy->group.cg_item, name);
+	config_group_init_type_name(&dummy->group, name, &iio_dummy_type);
+
 	iio_dummy_probe(name);
-	return group;
+	printk(KERN_ALERT  "device make group called with name %s\n", name);
+	return &dummy->group;
 }
 
 static void device_drop_group(struct config_group *group,
-			      struct config_item *item)
+			       struct config_item *item)
 {
-	printk(KERN_ALERT "%s\n", config_item_name(item));
-	iio_dummy_remove(config_item_name(item));
+//	iio_dummy_remove(2);
+	printk(KERN_ALERT "device drop group called\n");
+	config_item_put(item);	
 }
-//---------------------------------------------------------------------------
-// device ops
+
+
 static struct configfs_group_operations device_ops = {
 	.make_group	= &device_make_group,
 	.drop_item	= &device_drop_group,
 };
-// Device type group type
+
 static struct config_item_type iio_device_type_group_type = {
 	.ct_group_ops = &device_ops,
 	.ct_owner = THIS_MODULE,
 };
-// Group type
+
 static struct config_item_type iio_devices_group_type = {
 	.ct_owner = THIS_MODULE,
 };
 
-// created with mkdir on a config_group
+
 static struct config_group iio_devices_group = {
 	.cg_item = {
 		.ci_namebuf = "devices",
 		.ci_type = &iio_devices_group_type,
-	}, 
+	},
 };
+
+//-----------------------------------------------------------------
 
 static struct config_group *iio_root_default_groups[] = {
 	&iio_triggers_group,
 	&iio_devices_group,
 	NULL
 };
-
+//-----------------------------------------------------------------
 static struct config_item_type iio_root_group_type = {
 	.ct_owner       = THIS_MODULE,
 };
@@ -136,7 +146,23 @@ void iio_sw_trigger_type_configfs_unregister(struct iio_sw_trigger_type *tt)
 }
 EXPORT_SYMBOL_GPL(iio_sw_trigger_type_configfs_unregister);
 
+//-----------------------------------------------------------
 
+int iio_device_type_configfs_register(struct config_group *dummy, const char *name)
+{
+	config_group_init_type_name(dummy, name, &iio_device_type_group_type);
+
+	return configfs_register_group(&iio_devices_group, dummy);
+}
+EXPORT_SYMBOL_GPL(iio_device_type_configfs_register);
+
+void iio_device_type_configfs_unregister(struct config_group *dummy)
+{
+	configfs_unregister_group(dummy);
+}
+EXPORT_SYMBOL_GPL(iio_device_type_configfs_unregister);
+
+//----------------------------------------------------------
 static int __init iio_configfs_init(void)
 {
 	config_group_init(&iio_triggers_group);
