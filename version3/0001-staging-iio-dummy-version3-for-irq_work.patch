@@ -1,0 +1,215 @@
+From 2bbde02a971ce7b0453eda4cdf1bdb3aebef1e25 Mon Sep 17 00:00:00 2001
+Message-Id: <2bbde02a971ce7b0453eda4cdf1bdb3aebef1e25.1441194567.git.cristina.opriceana@gmail.com>
+From: Cristina Opriceana <cristina.opriceana@gmail.com>
+Date: Wed, 2 Sep 2015 14:46:14 +0300
+Subject: [PATCH] staging: iio: dummy: version3 for irq_work
+
+Signed-off-by: Cristina Opriceana <cristina.opriceana@gmail.com>
+---
+ drivers/staging/iio/iio_dummy_evgen.c         | 14 ++++++++++++--
+ drivers/staging/iio/iio_dummy_evgen.h         |  4 +++-
+ drivers/staging/iio/iio_simple_dummy.c        |  8 +++++++-
+ drivers/staging/iio/iio_simple_dummy.h        | 10 ++++++++--
+ drivers/staging/iio/iio_simple_dummy_events.c | 27 ++++++++++++---------------
+ 5 files changed, 42 insertions(+), 21 deletions(-)
+
+diff --git a/drivers/staging/iio/iio_dummy_evgen.c b/drivers/staging/iio/iio_dummy_evgen.c
+index 6d38854..aca77c7 100644
+--- a/drivers/staging/iio/iio_dummy_evgen.c
++++ b/drivers/staging/iio/iio_dummy_evgen.c
+@@ -43,6 +43,7 @@ struct iio_dummy_eventgen {
+ 	bool inuse[IIO_EVENTGEN_NO];
+ 	struct iio_dummy_regs regs[IIO_EVENTGEN_NO];
+ 	struct mutex lock;
++	struct irq_work *work;
+ };
+ 
+ /* We can only ever have one instance of this 'device' */
+@@ -142,6 +143,14 @@ struct iio_dummy_regs *iio_dummy_evgen_get_regs(int irq)
+ }
+ EXPORT_SYMBOL_GPL(iio_dummy_evgen_get_regs);
+ 
++void iio_dummy_init_work(struct irq_work *work)
++{
++	if (iio_evgen){
++		iio_evgen->work = work;
++	}
++}
++EXPORT_SYMBOL_GPL(iio_dummy_init_work);
++
+ static void iio_dummy_evgen_free(void)
+ {
+ 	irq_free_descs(iio_evgen->base, IIO_EVENTGEN_NO);
+@@ -169,8 +178,9 @@ static ssize_t iio_evgen_poke(struct device *dev,
+ 	iio_evgen->regs[this_attr->address].reg_id   = this_attr->address;
+ 	iio_evgen->regs[this_attr->address].reg_data = event;
+ 
+-	if (iio_evgen->enabled[this_attr->address])
+-		handle_nested_irq(iio_evgen->base + this_attr->address);
++	printk(KERN_ALERT "called interrupt gen on %d\n", (int)this_attr->address);
++	irq_work_queue(iio_evgen->work);
++
+ 
+ 	return len;
+ }
+diff --git a/drivers/staging/iio/iio_dummy_evgen.h b/drivers/staging/iio/iio_dummy_evgen.h
+index d044b94..48fecac 100644
+--- a/drivers/staging/iio/iio_dummy_evgen.h
++++ b/drivers/staging/iio/iio_dummy_evgen.h
+@@ -1,6 +1,8 @@
+ #ifndef _IIO_DUMMY_EVGEN_H_
+ #define _IIO_DUMMY_EVGEN_H_
+ 
++#include <linux/irq_work.h>
++
+ struct iio_dummy_regs {
+ 	u32 reg_id;
+ 	u32 reg_data;
+@@ -9,5 +11,5 @@ struct iio_dummy_regs {
+ struct iio_dummy_regs *iio_dummy_evgen_get_regs(int irq);
+ int iio_dummy_evgen_get_irq(void);
+ void iio_dummy_evgen_release_irq(int irq);
+-
++void iio_dummy_init_work(struct irq_work *work);
+ #endif /* _IIO_DUMMY_EVGEN_H_ */
+diff --git a/drivers/staging/iio/iio_simple_dummy.c b/drivers/staging/iio/iio_simple_dummy.c
+index 381f90f..07e8057 100644
+--- a/drivers/staging/iio/iio_simple_dummy.c
++++ b/drivers/staging/iio/iio_simple_dummy.c
+@@ -34,6 +34,7 @@ module_param(instances, uint, 0);
+ 
+ /* Pointer array used to fake bus elements */
+ static struct iio_dev **iio_dummy_devs;
++static struct interrupt_h **handlers;
+ 
+ /* Fake a name for the part number, usually obtained from the id table */
+ static const char *iio_dummy_part_number = "iio_dummy_part_no";
+@@ -635,7 +636,10 @@ static int iio_dummy_probe(int index)
+ 	/* Specify that device provides sysfs type interfaces */
+ 	indio_dev->modes = INDIO_DIRECT_MODE;
+ 
+-	ret = iio_simple_dummy_events_register(indio_dev);
++	handlers[index] = kzalloc(sizeof(struct interrupt_h), GFP_KERNEL);
++	handlers[index]->indio_dev = indio_dev;
++
++	ret = iio_simple_dummy_events_register(handlers[index]);
+ 	if (ret < 0)
+ 		goto error_free_device;
+ 
+@@ -710,6 +714,8 @@ static __init int iio_dummy_init(void)
+ 	/* Fake a bus */
+ 	iio_dummy_devs = kcalloc(instances, sizeof(*iio_dummy_devs),
+ 				 GFP_KERNEL);
++	handlers = kcalloc(instances, sizeof(*handlers), GFP_KERNEL);
++
+ 	/* Here we have no actual device so call probe */
+ 	for (i = 0; i < instances; i++) {
+ 		ret = iio_dummy_probe(i);
+diff --git a/drivers/staging/iio/iio_simple_dummy.h b/drivers/staging/iio/iio_simple_dummy.h
+index 8d00224..9cea705 100644
+--- a/drivers/staging/iio/iio_simple_dummy.h
++++ b/drivers/staging/iio/iio_simple_dummy.h
+@@ -11,6 +11,7 @@
+ #ifndef _IIO_SIMPLE_DUMMY_H_
+ #define _IIO_SIMPLE_DUMMY_H_
+ #include <linux/kernel.h>
++#include <linux/irq_work.h>
+ 
+ struct iio_dummy_accel_calibscale;
+ struct iio_dummy_regs;
+@@ -53,6 +54,11 @@ struct iio_dummy_state {
+ 
+ struct iio_dev;
+ 
++struct interrupt_h {
++	struct iio_dev *indio_dev;
++	struct irq_work work;
++};
++
+ int iio_simple_dummy_read_event_config(struct iio_dev *indio_dev,
+ 				       const struct iio_chan_spec *chan,
+ 				       enum iio_event_type type,
+@@ -78,13 +84,13 @@ int iio_simple_dummy_write_event_value(struct iio_dev *indio_dev,
+ 				       enum iio_event_info info, int val,
+ 				       int val2);
+ 
+-int iio_simple_dummy_events_register(struct iio_dev *indio_dev);
++int iio_simple_dummy_events_register(struct interrupt_h *handler);
+ void iio_simple_dummy_events_unregister(struct iio_dev *indio_dev);
+ 
+ #else /* Stubs for when events are disabled at compile time */
+ 
+ static inline int
+-iio_simple_dummy_events_register(struct iio_dev *indio_dev)
++iio_simple_dummy_events_register(struct interrupt_h *handler)
+ {
+ 	return 0;
+ };
+diff --git a/drivers/staging/iio/iio_simple_dummy_events.c b/drivers/staging/iio/iio_simple_dummy_events.c
+index 73108ba..aff3f57 100644
+--- a/drivers/staging/iio/iio_simple_dummy_events.c
++++ b/drivers/staging/iio/iio_simple_dummy_events.c
+@@ -163,11 +163,16 @@ int iio_simple_dummy_write_event_value(struct iio_dev *indio_dev,
+  * Here only one event occurs so we push that directly on with locally
+  * grabbed timestamp.
+  */
+-static irqreturn_t iio_simple_dummy_event_handler(int irq, void *private)
++//static irqreturn_t iio_simple_dummy_event_handler(int irq, void *private)
++void iio_simple_dummy_event_handler(struct irq_work *work)
+ {
+-	struct iio_dev *indio_dev = private;
++	struct interrupt_h *h_struct = container_of(work, struct interrupt_h, work);
++
++	struct iio_dev *indio_dev = h_struct->indio_dev;
+ 	struct iio_dummy_state *st = iio_priv(indio_dev);
+ 
++	printk(KERN_ALERT "Called %x id and event %x\n", st->regs->reg_id, st->regs->reg_data);
++
+ 	dev_dbg(&indio_dev->dev, "id %x event %x\n",
+ 		st->regs->reg_id, st->regs->reg_data);
+ 
+@@ -209,8 +214,6 @@ static irqreturn_t iio_simple_dummy_event_handler(int irq, void *private)
+ 	default:
+ 		break;
+ 	}
+-
+-	return IRQ_HANDLED;
+ }
+ 
+ /**
+@@ -224,8 +227,9 @@ static irqreturn_t iio_simple_dummy_event_handler(int irq, void *private)
+  * no way forms part of this example. Just assume that events magically
+  * appear via the provided interrupt.
+  */
+-int iio_simple_dummy_events_register(struct iio_dev *indio_dev)
++int iio_simple_dummy_events_register(struct interrupt_h *handler)
+ {
++	struct iio_dev *indio_dev = handler->indio_dev;
+ 	struct iio_dummy_state *st = iio_priv(indio_dev);
+ 	int ret;
+ 
+@@ -237,18 +241,11 @@ int iio_simple_dummy_events_register(struct iio_dev *indio_dev)
+ 	}
+ 	st->regs = iio_dummy_evgen_get_regs(st->event_irq);
+ 
+-	ret = request_threaded_irq(st->event_irq,
+-				   NULL,
+-				   &iio_simple_dummy_event_handler,
+-				   IRQF_ONESHOT,
+-				   "iio_simple_event",
+-				   indio_dev);
+-	if (ret < 0)
+-		goto error_free_evgen;
++	init_irq_work(&handler->work, &iio_simple_dummy_event_handler);
++	iio_dummy_init_work(&handler->work);
++
+ 	return 0;
+ 
+-error_free_evgen:
+-	iio_dummy_evgen_release_irq(st->event_irq);
+ error_ret:
+ 	return ret;
+ }
+-- 
+1.9.1
+
