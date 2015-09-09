@@ -1,4 +1,4 @@
-From 4366f9bd01e52d45e1b0a092d6679fc23bd234d9 Mon Sep 17 00:00:00 2001
+From c330ba84e9db056e9cb6791b07394ddf7fa356e4 Mon Sep 17 00:00:00 2001
 From: Cristina Opriceana <cristina.opriceana@gmail.com>
 Date: Wed, 9 Sep 2015 15:04:06 +0300
 Subject: [PATCH] iio: staging: dummy: irq_work with handle_simple_irq
@@ -6,8 +6,8 @@ Subject: [PATCH] iio: staging: dummy: irq_work with handle_simple_irq
 ---
  drivers/staging/iio/iio_dummy_evgen.c         | 17 ++++++++++++++++-
  drivers/staging/iio/iio_simple_dummy.h        |  1 +
- drivers/staging/iio/iio_simple_dummy_events.c | 11 ++++++++++-
- 3 files changed, 27 insertions(+), 2 deletions(-)
+ drivers/staging/iio/iio_simple_dummy_events.c | 19 ++++++++++++++-----
+ 3 files changed, 31 insertions(+), 6 deletions(-)
 
 diff --git a/drivers/staging/iio/iio_dummy_evgen.c b/drivers/staging/iio/iio_dummy_evgen.c
 index 6d38854..04b9467 100644
@@ -82,7 +82,7 @@ index 8d00224..5c2f4d0 100644
  };
  
 diff --git a/drivers/staging/iio/iio_simple_dummy_events.c b/drivers/staging/iio/iio_simple_dummy_events.c
-index 73108ba..5b0ea51 100644
+index 73108ba..bfbf1c5 100644
 --- a/drivers/staging/iio/iio_simple_dummy_events.c
 +++ b/drivers/staging/iio/iio_simple_dummy_events.c
 @@ -153,6 +153,15 @@ int iio_simple_dummy_write_event_value(struct iio_dev *indio_dev,
@@ -101,6 +101,41 @@ index 73108ba..5b0ea51 100644
  /**
   * iio_simple_dummy_event_handler() - identify and pass on event
   * @irq: irq of event line
+@@ -177,7 +186,7 @@ static irqreturn_t iio_simple_dummy_event_handler(int irq, void *private)
+ 			       IIO_EVENT_CODE(IIO_VOLTAGE, 0, 0,
+ 					      IIO_EV_DIR_RISING,
+ 					      IIO_EV_TYPE_THRESH, 0, 0, 0),
+-			       iio_get_time_ns());
++			       st->event_timestamp);
+ 		break;
+ 	case 1:
+ 		if (st->activity_running > st->event_val)
+@@ -187,7 +196,7 @@ static irqreturn_t iio_simple_dummy_event_handler(int irq, void *private)
+ 						      IIO_EV_DIR_RISING,
+ 						      IIO_EV_TYPE_THRESH,
+ 						      0, 0, 0),
+-				       iio_get_time_ns());
++				       st->event_timestamp);
+ 		break;
+ 	case 2:
+ 		if (st->activity_walking < st->event_val)
+@@ -197,14 +206,14 @@ static irqreturn_t iio_simple_dummy_event_handler(int irq, void *private)
+ 						      IIO_EV_DIR_FALLING,
+ 						      IIO_EV_TYPE_THRESH,
+ 						      0, 0, 0),
+-				       iio_get_time_ns());
++				       st->event_timestamp);
+ 		break;
+ 	case 3:
+ 		iio_push_event(indio_dev,
+ 			       IIO_EVENT_CODE(IIO_STEPS, 0, IIO_NO_MOD,
+ 					      IIO_EV_DIR_NONE,
+ 					      IIO_EV_TYPE_CHANGE, 0, 0, 0),
+-			       iio_get_time_ns());
++			       st->event_timestamp);
+ 		break;
+ 	default:
+ 		break;
 @@ -238,7 +247,7 @@ int iio_simple_dummy_events_register(struct iio_dev *indio_dev)
  	st->regs = iio_dummy_evgen_get_regs(st->event_irq);
  
